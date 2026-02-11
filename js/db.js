@@ -8,7 +8,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 let supabaseClient = null;
 
-if (SUPABASE_URL !== 'https://zjiwmihocpajstgzdlec.supabase.co') {
+if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
     // initialize the supabase client
     supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 }
