@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MINDGUARD: Big Five & Daily Focus v4.0</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body class="gradient-bg min-h-screen p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+
+        <!-- HEADER -->
+        <header class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-6 md:p-8 mb-6 card-hover">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <h1 class="text-3xl md:text-4xl font-bold text-slate-800 dark:text-slate-100 mb-2">
+                        <span id="greeting">Halo, Herzi</span>
+                        <button onclick="editName()"
+                            class="ml-2 text-lg text-indigo-500 hover:text-indigo-600">✏️</button>
+                    </h1>
+                    <p class="text-slate-500 dark:text-slate-400 font-medium mb-2" id="currentDate"></p>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-2xl">🔥</span>
+                        <span class="font-bold text-orange-600 dark:text-orange-400" id="streakCounter">0 hari
+                            streak</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl">⭐</span>
+                        <span class="font-bold text-indigo-600 dark:text-indigo-400" id="levelDisplay">Lvl 1</span>
+                        <span class="text-sm text-slate-500 dark:text-slate-400" id="xpDisplay">0 XP</span>
+                    </div>
+                </div>
+
+                <div class="md:col-span-2">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-sm font-semibold text-slate-700 dark:text-slate-300">Energy Level</label>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-bold text-indigo-600 dark:text-indigo-400"
+                                id="energyLabel">Medium</span>
+                            <button onclick="showXPShop()"
+                                class="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg hover:bg-emerald-200 dark:hover:bg-emerald-800"
+                                title="XP Shop">🛒</button>
+                            <button onclick="showAchievements()"
+                                class="p-2 bg-amber-100 dark:bg-amber-900 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-800"
+                                title="Achievements">🏆</button>
+                            <button onclick="showKeyboardHelp()"
+                                class="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600"
+                                title="Keyboard Shortcuts">⌨️</button>
+                            <button onclick="toggleDarkMode()"
+                                class="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600"
+                                title="Toggle Dark Mode">
+                                <span id="darkModeIcon">🌙</span>
+                            </button>
+                        </div>
+                    </div>
+                    <input type="range" min="0" max="100" value="50" class="w-full" id="energySlider"
+                        oninput="updateEnergy(this.value)">
+                    <div class="flex justify-between text-xs text-slate-400 dark:text-slate-500 mt-1">
+                        <span>🪫 Low Battery</span>
+                        <span>⚡ Full Charge</span>
+                    </div>
+
+                    <!-- XP Progress Bar -->
+                    <div class="mt-4">
+                        <div class="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                            <span>Level Progress</span>
+                            <span id="xpProgress">0/100 XP</span>
+                        </div>
+                        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+                            <div id="xpBar" class="bg-indigo-600 h-full rounded-full transition-all duration-300"
+                                style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- PROGRESS SUMMARY -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-6 md:p-8 mb-6 card-hover">
+            <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center">
+                <span
+                    class="bg-violet-100 dark:bg-violet-900 text-violet-600 dark:text-violet-400 w-10 h-10 rounded-lg flex items-center justify-center mr-3">📊</span>
+                Status Kepribadianmu
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="progressSummary"></div>
+        </div>
+
+        <!-- BENTO GRID -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+            <!-- BIG FIVE MONITOR -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-6 md:p-8 card-hover">
+                <h2
+                    class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center justify-between">
+                    <div class="flex items-center">
+                        <span
+                            class="bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 w-10 h-10 rounded-lg flex items-center justify-center mr-3">📊</span>
+                        Big Five Monitor
+                    </div>
+                    <button onclick="showBigFiveInfo()"
+                        class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-200 dark:hover:bg-indigo-800 flex items-center justify-center font-bold text-sm transition-all">
+                        ?
+                    </button>
+                </h2>
+                <div id="bigFiveMeters" class="space-y-6"></div>
+
+                <!-- PERSONALITY INSIGHT -->
+                <div
+                    class="mt-6 p-4 bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 rounded-xl border-2 border-violet-200 dark:border-violet-800">
+                    <div class="flex items-start gap-3">
+                        <span class="text-2xl">🧠</span>
+                        <div class="flex-1">
+                            <h3 class="font-bold text-violet-900 dark:text-violet-200 mb-2">Personality Insight</h3>
+                            <div id="personalityInsight" class="text-sm text-violet-800 dark:text-violet-300 space-y-2">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="showFaultsModal()"
+                    class="w-full mt-4 py-3 bg-slate-100 dark:bg-slate-700 hover:bg-rose-600 hover:text-white dark:hover:bg-rose-600 text-slate-600 dark:text-slate-300 rounded-xl font-bold transition-all flex items-center justify-center gap-2">
+                    🚨 Lihat Diagnosa Kesalahan & Kelemahan
+                </button>
+            </div>
+
+            <!-- SKILL MASTERY -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-6 md:p-8 card-hover relative">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center">
+                        <span
+                            class="bg-cyan-100 dark:bg-cyan-900 text-cyan-600 dark:text-cyan-400 w-10 h-10 rounded-lg flex items-center justify-center mr-3">📚</span>
+                        Skill Mastery
+                    </h2>
+                    <button id="toggleSkillEditBtn" onclick="toggleSkillEdit()"
+                        class="text-sm px-3 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-all">
+                        Edit
+                    </button>
+                </div>
+
+                <!-- Add Skill Form (Hidden by default) -->
+                <div id="addSkillForm" class="hidden mb-6 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl space-y-3">
+                    <div class="flex gap-2">
+                        <input type="text" id="newSkillName" placeholder="Nama Skill..."
+                            class="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:outline-none">
+                        <input type="text" id="newSkillIcon" placeholder="Emoji"
+                            class="w-16 px-2 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg text-center focus:outline-none">
+                    </div>
+                    <div class="flex gap-2">
+                        <select id="newSkillColor"
+                            class="flex-1 px-3 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:outline-none">
+                            <option value="cyan">Cyan</option>
+                            <option value="rose">Rose</option>
+                            <option value="emerald">Emerald</option>
+                            <option value="amber">Amber</option>
+                            <option value="indigo">Indigo</option>
+                            <option value="purple">Purple</option>
+                        </select>
+                        <button onclick="addSkill()"
+                            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold">Tambah</button>
+                    </div>
+                </div>
+
+                <div id="skillList" class="space-y-6">
+                    <!-- Skills will be rendered here dynamically -->
+                </div>
+            </div>
+
+            <!-- MISI HARIAN -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-6 md:p-8 card-hover">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center">
+                        <span
+                            class="bg-emerald-100 dark:bg-emerald-900 text-emerald-600 dark:text-emerald-400 w-10 h-10 rounded-lg flex items-center justify-center mr-3">📋</span>
+                        Misi Harian
+                    </h2>
+                    <button onclick="showTemplateModal()"
+                        class="text-xs px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-all font-bold border border-indigo-100 dark:border-indigo-800">
+                        📁 Templates
+                    </button>
+                </div>
+
+                <!-- Add Task -->
+                <div class="flex flex-col gap-3 mb-4">
+                    <div class="flex gap-2">
+                        <select id="taskPriority"
+                            class="px-3 py-3 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="medium">📌 Medium</option>
+                            <option value="high">🔥 High</option>
+                            <option value="low">💡 Low</option>
+                        </select>
+                        <input type="text" id="taskInput" placeholder="Tambah misi baru (Ctrl+N)..."
+                            class="flex-1 px-4 py-3 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            onkeypress="if(event.key === 'Enter') addTask()">
+                    </div>
+                    <div class="flex gap-2 items-center flex-wrap">
+                        <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-700/50 px-3 py-2 rounded-lg">
+                            <label
+                                class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Deadline:</label>
+                            <input type="datetime-local" id="taskDeadline"
+                                class="bg-transparent border-none dark:text-slate-200 focus:outline-none text-sm">
+                        </div>
+                        <button onclick="addTask()"
+                            class="ml-auto px-8 py-2 bg-indigo-600 text-white rounded-xl font-bold shadow-lg transition-all active:scale-95">
+                            Tambah Misi
+                        </button>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <!-- Deadline Tasks Section -->
+                    <div id="deadlineSection">
+                        <h3
+                            class="text-xs font-black text-rose-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <span>⏰ Misi Berdeadline</span>
+                            <div class="h-px bg-rose-200 dark:bg-rose-900/50 flex-1"></div>
+                        </h3>
+                        <div id="deadlineTaskList" class="space-y-2 mb-4"></div>
+                    </div>
+
+                    <!-- Daily Tasks Section -->
+                    <div id="dailySection">
+                        <h3
+                            class="text-xs font-black text-emerald-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <span>✅ Misi Harian</span>
+                            <div class="h-px bg-emerald-200 dark:bg-emerald-900/50 flex-1"></div>
+                        </h3>
+                        <div id="dailyTaskList" class="space-y-2 mb-4"></div>
+                    </div>
+                </div>
+
+                <!-- SPECIFIC WASTE BUTTONS -->
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <button onclick="applyDoomscrollPenalty()"
+                        class="py-3 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-xl hover:bg-rose-100 dark:hover:bg-rose-900/50 font-semibold text-sm border-2 border-rose-200 dark:border-rose-800 group relative overflow-hidden">
+                        <span class="relative z-10">📱 Scrolling Buruk</span>
+                        <div
+                            class="absolute inset-0 bg-rose-600/10 translate-y-full group-hover:translate-y-0 transition-transform">
+                        </div>
+                    </button>
+                    <button onclick="wasteGaming()"
+                        class="py-3 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-xl hover:bg-purple-100 dark:hover:bg-purple-900/50 font-semibold text-sm border-2 border-purple-200 dark:border-purple-800">
+                        🎮 Gaming
+                    </button>
+                    <button onclick="wasteOversleep()"
+                        class="py-3 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900/50 font-semibold text-sm border-2 border-blue-200 dark:border-blue-800">
+                        🛌 Rebahan
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- PERMINTAAN ORANG LAIN -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-6 md:p-8 card-hover">
+                <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center">
+                    <span
+                        class="bg-orange-100 dark:bg-orange-900 text-orange-600 dark:text-orange-400 w-10 h-10 rounded-lg flex items-center justify-center mr-3">🤝</span>
+                    Permintaan Orang Lain
+                </h2>
+
+                <!-- Add Request -->
+                <div class="flex gap-2 mb-4">
+                    <input type="text" id="requestPersonInput" placeholder="Nama orang..."
+                        class="w-1/3 px-4 py-3 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500">
+                    <input type="text" id="requestInput" placeholder="Apa permintaannya..."
+                        class="flex-1 px-4 py-3 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        onkeypress="if(event.key === 'Enter') addRequest()">
+                    <button onclick="addRequest()"
+                        class="px-6 py-3 bg-orange-600 text-white rounded-xl hover:bg-orange-700 font-semibold">+</button>
+                </div>
+
+                <div id="requestList" class="space-y-2 max-h-64 overflow-y-auto"></div>
+            </div>
+        </div>
+
+        <!-- JOURNAL -->
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-6 md:p-8 mb-6 card-hover">
+            <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center">
+                <span
+                    class="bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400 w-10 h-10 rounded-lg flex items-center justify-center mr-3">💡</span>
+                Daily Journal & Ideas
+            </h2>
+            <textarea id="journalText"
+                class="w-full h-32 px-4 py-3 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:placeholder-slate-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                placeholder="Tulis ide kilat atau curhat singkat di sini..." oninput="saveJournal()"></textarea>
+        </div>
+
+        <!-- FOOTER -->
+        <footer
+            class="bg-gradient-to-r from-slate-700 to-slate-900 dark:from-slate-900 dark:to-black rounded-2xl shadow-sm p-6 md:p-8 text-center">
+            <p class="text-slate-200 dark:text-slate-300 italic text-lg md:text-xl leading-relaxed" id="quote"></p>
+            <p class="text-slate-400 dark:text-slate-500 text-sm mt-2">— Refresh untuk kutipan baru —</p>
+        </footer>
+    </div>
+
+    <!-- MODALS -->
+    <!-- XP Shop Modal -->
+    <div id="xpShopModal" class="modal">
+        <div
+            class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-3xl font-bold text-slate-800 dark:text-slate-100">🛒 XP Shop</h2>
+                <button onclick="closeXPShop()"
+                    class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">×</button>
+            </div>
+            <div class="mb-6 p-4 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
+                <p class="text-center text-lg font-bold text-indigo-800 dark:text-indigo-300">
+                    Your XP: <span id="shopXPDisplay">0</span> XP
+                </p>
+            </div>
+            <div class="space-y-4" id="shopItems"></div>
+        </div>
+    </div>
+
+    <!-- Achievements Modal -->
+    <div id="achievementsModal" class="modal">
+        <div
+            class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-3xl font-bold text-slate-800 dark:text-slate-100">🏆 Achievements</h2>
+                <button onclick="closeAchievements()"
+                    class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">×</button>
+            </div>
+            <div id="achievementsList" class="grid grid-cols-2 md:grid-cols-3 gap-4"></div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Modal -->
+    <div id="keyboardModal" class="modal">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100">⌨️ Keyboard Shortcuts</h2>
+                <button onclick="closeKeyboardHelp()"
+                    class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">×</button>
+            </div>
+            <div class="space-y-3 text-slate-700 dark:text-slate-300">
+                <div class="flex justify-between">
+                    <span class="font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">Ctrl+N</span>
+                    <span>New Task</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">Ctrl+D</span>
+                    <span>Toggle Dark Mode</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">Ctrl+K</span>
+                    <span>Focus Search</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">?</span>
+                    <span>Show This Help</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Big Five Info Modal -->
+    <div id="bigFiveModal" class="modal">
+        <div
+            class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100">📊 Penjelasan Big Five Personality
+                </h2>
+                <button onclick="closeBigFiveInfo()"
+                    class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">×</button>
+            </div>
+            <div class="space-y-6 text-slate-700 dark:text-slate-300">
+                <!-- Openness -->
+                <div class="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-xl border-l-4 border-purple-500">
+                    <h3 class="font-bold text-lg text-purple-700 dark:text-purple-400 mb-2">🔮 Keterbukaan (Eksperimen
+                        Ide)</h3>
+                    <p class="text-sm mb-2"><strong>Hubungan ke Produktivitas:</strong> Kemauanmu untuk mencoba cara
+                        kerja baru dan belajar skill baru.</p>
+                    <p class="text-sm mb-2"><strong>Tinggi:</strong> Suka belajar hal baru, kreatif, tapi hati-hati
+                        dengan <i>"Shiny Object Syndrome"</i> (gampang pindah-pindah fokus karena ada hal baru yang
+                        menarik).</p>
+                    <p class="text-sm"><strong>Rendah:</strong> Lebih suka cara lama yang sudah terbukti, stabil, tapi
+                        bisa terjebak di zona nyaman.</p>
+                </div>
+
+                <!-- Conscientiousness -->
+                <div class="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border-l-4 border-indigo-500">
+                    <h3 class="font-bold text-lg text-indigo-700 dark:text-indigo-400 mb-2">🎯 Kedisiplinan (Mesin
+                        Produktivitas)</h3>
+                    <p class="text-sm mb-2"><strong>Hubungan ke Produktivitas:</strong> Kontrol utamamu atas rasa malas
+                        dan kemampuan untuk menyelesaikan apa yang dimulai.</p>
+                    <p class="text-sm mb-2"><strong>Tinggi:</strong> Sangat produktif, jarang menunda, teratur, dan
+                        punya ambisi kuat. Ini adalah kunci "Anti-Malas".</p>
+                    <p class="text-sm"><strong>Rendah:</strong> Cenderung malas, sering menunda (prokrastinasi), gampang
+                        terdistraksi, dan kurang terencana.</p>
+                </div>
+
+                <!-- Extraversion -->
+                <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border-l-4 border-blue-500">
+                    <h3 class="font-bold text-lg text-blue-700 dark:text-blue-400 mb-2">🌟 Kesosialan (Distraksi Luar)
+                    </h3>
+                    <p class="text-sm mb-2"><strong>Hubungan ke Produktivitas:</strong> Bagaimana interaksi sosial
+                        mempengaruhi fokus kerjamu.</p>
+                    <p class="text-sm mb-2"><strong>Tinggi:</strong> Produktif saat kerja bareng orang, tapi gampang
+                        terdistraksi oleh ajakan nongkrong atau notifikasi sosmed.</p>
+                    <p class="text-sm"><strong>Rendah:</strong> Lebih produktif saat kerja sendirian dan fokus dalam
+                        ketenangan (Deep Work).</p>
+                </div>
+
+                <!-- Agreeableness -->
+                <div class="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border-l-4 border-emerald-500">
+                    <h3 class="font-bold text-lg text-emerald-700 dark:text-emerald-400 mb-2">💚 Keramahan (Prioritas
+                        Diri)</h3>
+                    <p class="text-sm mb-2"><strong>Hubungan ke Produktivitas:</strong> Kemampuan untuk berkata "TIDAK"
+                        demi menjaga jadwal kerjamu sendiri.</p>
+                    <p class="text-sm mb-2"><strong>Tinggi:</strong> Sifat "Gak Enakan". Sering mengorbankan kerjaan
+                        sendiri demi bantu orang lain (Produktivitas bisa terhambat).</p>
+                    <p class="text-sm"><strong>Rendah:</strong> Tegas, bisa fokus ke target pribadi dulu sebelum
+                        membantu orang lain.</p>
+                </div>
+
+                <!-- Neuroticism -->
+                <div class="p-4 bg-rose-50 dark:bg-rose-900/20 rounded-xl border-l-4 border-rose-500">
+                    <h3 class="font-bold text-lg text-rose-700 dark:text-rose-400 mb-2">😰 Kecemasan (Efek Stres)</h3>
+                    <p class="text-sm mb-2"><strong>Hubungan ke Produktivitas:</strong> Bagaimana beban mental dan stres
+                        membuatmu berhenti atau terus jalan.</p>
+                    <p class="text-sm mb-2"><strong>Tinggi:</strong> Gampang cemas dan <i>overthinking</i>. Saat stres
+                        berat bisa terjadi <i>burnout</i> atau mogok kerja.</p>
+                    <p class="text-sm"><strong>Rendah:</strong> Tetap tenang meski tugas menumpuk. Cenderung sangat
+                        percaya diri, langsung praktek, dan tidak banyak mikir (gaspol).</p>
+                </div>
+
+                <div class="mt-6 p-4 bg-slate-50 dark:bg-slate-900/30 rounded-xl text-center">
+                    <p class="text-sm font-bold text-indigo-600 dark:text-indigo-400 mb-1">
+                        🚀 Misi Utama: Naikkan "Kedisiplinan" & Jaga "Kecemasan"!
+                    </p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 italic">
+                        Pantau terus meteranmu setiap hari untuk mengontrol rasa malas.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="importFileInput" accept=".json" style="display:none" onchange="handleImport(event)">
+
+    <!-- JavaScript -->
+    <script src="js/data.js"></script>
+    <script src="js/db.js"></script>
+    <!-- charakter FAULTS MODAL (BLIND SPOTS) -->
+    <div id="faultsModal" class="modal">
+        <div
+            class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                    🚨 Diagnosa Kesalahan Karakter
+                </h2>
+                <button onclick="closeFaultsModal()"
+                    class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-2xl">×</button>
+            </div>
+
+            <div id="faultsDetailContent" class="space-y-6">
+                <!-- Content injected by JS -->
+            </div>
+
+            <button onclick="closeFaultsModal()"
+                class="w-full mt-8 py-3 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 transition-all shadow-lg">
+                Saya Mengerti & Akan Berubah
+            </button>
+        </div>
+    </div>
+
+    <!-- Template Modal -->
+    <div id="templateModal" class="modal">
+        <div
+            class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-xl w-full mx-4 max-h-[85vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    📁 Template Jadwal Misi
+                </h2>
+                <button onclick="closeTemplateModal()"
+                    class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-2xl">×</button>
+            </div>
+
+            <!-- Save Current as Template -->
+            <div
+                class="mb-8 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800">
+                <p class="text-sm font-bold text-indigo-700 dark:text-indigo-400 mb-3 uppercase tracking-wider">Simpan
+                    Misi Saat Ini Jadi Template</p>
+                <div class="flex gap-2">
+                    <input type="text" id="templateNameInput" placeholder="Nama Template (e.g. Hari Kerja)..."
+                        class="flex-1 px-4 py-2 border border-slate-200 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <button onclick="saveCurrentAsTemplate()"
+                        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold">Simpan</button>
+                </div>
+            </div>
+
+            <div id="templateList" class="space-y-4">
+                <!-- Templates will be rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+
+</html>

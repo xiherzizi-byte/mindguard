@@ -1,0 +1,11 @@
+# OS files
+Thumbs.db
+Desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+
+# Local data (if any was exported)
+*.json
+!package.json
