@@ -6,11 +6,41 @@
 let isSkillEditMode = false;
 
 // ============================================
+// TAB NAVIGATION
+// ============================================
+
+function switchTab(tabName) {
+    // Hide all panels, show target
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById(`panel-${tabName}`);
+    if (panel) panel.classList.add('active');
+
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        if (btn.onclick && btn.onclick.toString().includes(`'${tabName}'`)) {
+            btn.classList.add('active');
+        }
+    });
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ============================================
 // INITIALIZATION
 // ============================================
 
 async function initApp() {
     await loadData();
+
+    // Set name from auth if this is a new user
+    if (currentUser && window.appData.userName === 'Herzi') {
+        const authName = getAuthDisplayName();
+        if (authName && authName !== 'User') {
+            window.appData.userName = authName;
+        }
+    }
+
     applyTheme();
     renderBigFive();
     filterTasks();
@@ -24,6 +54,7 @@ async function initApp() {
     updatePersonalityInsight();
     renderRequests();
     checkDailyTaskPenalty();
+    updateTodayPreview();
 
     // Update date every minute
     setInterval(updateDate, 60000);
@@ -75,17 +106,27 @@ async function loadData() {
             tasks: [],
             requests: [],
             journal: '',
+            planning: '',
             history: [],
+            lastUpdated: Date.now(),
             lastDailyCheck: new Date().toDateString(),
             templates: []
         };
     }
 
     // Attempt to load from Cloud (Supabase)
-    const cloudData = await loadFromCloud();
+    const cloudData = await loadFromCloud(window.appData.userName);
     if (cloudData) {
-        window.appData = cloudData;
-        console.log('☁️ Data loaded from Cloud');
+        const localUpdate = window.appData.lastUpdated || 0;
+        const cloudUpdate = cloudData.lastUpdated || 0;
+
+        if (cloudUpdate > localUpdate) {
+            window.appData = cloudData;
+            console.log('☁️ Data loaded from Cloud (Newer)');
+        } else if (localUpdate > cloudUpdate) {
+            console.log('📱 Local data is newer, pushing to Cloud');
+            saveToCloud();
+        }
     }
 
     if (!window.appData.templates) window.appData.templates = [];
@@ -94,12 +135,18 @@ async function loadData() {
     document.getElementById('greeting').textContent = `Halo, ${window.appData.userName}`;
     document.getElementById('energySlider').value = window.appData.energy;
     updateEnergy(window.appData.energy);
-    document.getElementById('journalText').value = window.appData.journal;
+    document.getElementById('journalText').value = window.appData.journal || '';
+    if (document.getElementById('planningText')) {
+        document.getElementById('planningText').value = window.appData.planning || '';
+    }
 }
 
 function saveData() {
-    localStorage.setItem('mindguardData', JSON.stringify(window.appData));
-    saveToCloud(); // Sync to cloud in background
+    window.appData.lastUpdated = Date.now();
+    const dataStr = JSON.stringify(window.appData);
+    localStorage.setItem('mindguardData', dataStr);
+    localStorage.setItem('mindguardBackup', dataStr); // Secondary emergency backup
+    saveToCloud();
 }
 
 function exportData() {
@@ -369,14 +416,12 @@ function renderProgressSummary() {
         }
 
         return `
-            <div class="${bgColor} rounded-xl p-6 border-2 border-${textColor.split('-')[1]}-200 dark:border-${textColor.split('-')[1]}-800">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-bold text-slate-800 dark:text-slate-200">${card.name}</h3>
-                    <span class="text-3xl">${emoji}</span>
-                </div>
-                <div class="text-5xl font-bold ${textColor} mb-2">${card.value}%</div>
-                <p class="text-sm font-semibold ${textColor}">${status}</p>
-                <div class="mt-4 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3">
+            <div class="${bgColor} rounded-lg px-3 py-2 border-2 border-${textColor.split('-')[1]}-200 dark:border-${textColor.split('-')[1]}-800 flex items-center gap-3">
+                <span class="text-sm">${emoji}</span>
+                <span class="text-xs font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">${card.name}</span>
+                <span class="text-base font-black ${textColor}">${card.value}%</span>
+                <span class="text-[10px] font-bold ${textColor} whitespace-nowrap">${status}</span>
+                <div class="flex-1 bg-slate-200 dark:bg-slate-600 rounded-full h-1.5">
                     <div class="bg-gradient-to-r ${card.gradient} h-full rounded-full transition-all duration-300" style="width: ${card.value}%"></div>
                 </div>
             </div>
@@ -387,7 +432,17 @@ function renderProgressSummary() {
 function saveToHistory() {
     const today = new Date().toDateString();
     const existingIndex = window.appData.history.findIndex(h => h.date === today);
-    const entry = { date: today, bigFive: { ...window.appData.bigFive } };
+
+    // Get completed tasks for today (assuming tasks are cleared daily or we can filter by date if needed)
+    // For now, let's just take the count of completed tasks in the current session
+    const completedTasksRaw = window.appData.tasks.filter(t => t.completed).map(t => t.text);
+
+    const entry = {
+        date: today,
+        bigFive: { ...window.appData.bigFive },
+        journal: window.appData.journal || '',
+        completedTasks: completedTasksRaw
+    };
 
     if (existingIndex >= 0) {
         window.appData.history[existingIndex] = entry;
@@ -395,13 +450,14 @@ function saveToHistory() {
         window.appData.history.push(entry);
     }
 
-    // Keep only last 30 days
-    if (window.appData.history.length > 30) {
-        window.appData.history = window.appData.history.slice(-30);
+    // Keep only last 60 entries (2 months) for better reflection
+    if (window.appData.history.length > 60) {
+        window.appData.history = window.appData.history.slice(-60);
     }
 
     saveData();
     renderProgressSummary();
+    updateTodayPreview();
 }
 
 // ============================================
@@ -419,23 +475,23 @@ function renderBigFive() {
 
         container.innerHTML += `
             <div>
-                <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center justify-between mb-1">
                     <div class="flex items-center gap-2">
-                        <span class="text-2xl">${trait.icon}</span>
+                        <span class="text-sm">${trait.icon}</span>
                         <div>
-                            <p class="font-semibold text-slate-800 dark:text-slate-200">${trait.name}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">${trait.subtitle}</p>
+                            <p class="text-xs font-bold text-slate-800 dark:text-slate-200">${trait.name}</p>
+                            <p class="text-[10px] text-slate-400">${trait.subtitle}</p>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-1.5">
                         <button onclick="adjustTrait('${trait.id}', -5)" 
-                            class="w-8 h-8 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-slate-700 dark:text-slate-200 font-bold">−</button>
-                        <span class="font-bold text-lg text-slate-700 dark:text-slate-200 w-12 text-center">${value}%</span>
+                            class="w-6 h-6 text-xs bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded text-slate-700 dark:text-slate-200 font-bold">−</button>
+                        <span class="font-bold text-sm text-slate-700 dark:text-slate-200 w-10 text-center">${value}%</span>
                         <button onclick="adjustTrait('${trait.id}', 5)" 
-                            class="w-8 h-8 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-slate-700 dark:text-slate-200 font-bold">+</button>
+                            class="w-6 h-6 text-xs bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded text-slate-700 dark:text-slate-200 font-bold">+</button>
                     </div>
                 </div>
-                <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-3 overflow-hidden">
+                <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                     <div class="${barColor} h-full rounded-full transition-all duration-300" style="width: ${value}%"></div>
                 </div>
             </div>
@@ -588,19 +644,29 @@ function checkDailyTaskPenalty() {
         showToast(`⚠️ Misi harian tidak selesai! -${totalPenalty} XP, Conscientiousness -10%, Neuroticism +5%`, 'error');
 
         // Log to console for debugging
-        console.log('Daily Task Penalty Applied:');
-        console.log(penaltyDetails.join('\n'));
-        console.log(`Total Penalty: -${totalPenalty} XP`);
-
-        // Remove incomplete tasks (they failed)
-        window.appData.tasks = window.appData.tasks.filter(t => t.completed);
-        filterTasks();
+        console.log('Daily Task Penalty Applied');
     }
+
+    // RESET FOR NEW DAY
+    // 1. Reset completed status for all "Daily Tasks" (tasks without deadline)
+    window.appData.tasks.forEach(task => {
+        if (!task.deadline) {
+            task.completed = false;
+        }
+    });
+
+    // 2. Clear Daily Journal for the new day
+    window.appData.journal = '';
+    const journalElem = document.getElementById('journalText');
+    if (journalElem) journalElem.value = '';
 
     // Update last check date
     window.appData.lastDailyCheck = today;
     updateLevel();
+    filterTasks(); // Re-render tasks
+    updateTodayPreview();
     saveData();
+    showToast('🌅 Selamat pagi! Misi harian & jurnal telah di-reset.', 'info');
 }
 
 // ============================================
@@ -767,12 +833,14 @@ function toggleTask(taskId) {
 
     filterTasks();
     saveData();
+    saveToHistory();
 }
 
 function deleteTask(taskId) {
     window.appData.tasks = window.appData.tasks.filter(t => t.id !== taskId);
     filterTasks();
     saveData();
+    saveToHistory();
     showToast('🗑️ Misi dihapus', 'info');
 }
 
@@ -1056,12 +1124,136 @@ function purchaseReward(rewardId, price) {
 }
 
 // ============================================
-// JOURNAL
+// JOURNAL & HISTORY
 // ============================================
 
-function saveJournal() {
+function saveJournalAndSyncHistory() {
     window.appData.journal = document.getElementById('journalText').value;
+    saveToHistory(); // This will auto-save to cloud and local storage
+}
+
+function savePlanning() {
+    window.appData.planning = document.getElementById('planningText').value;
     saveData();
+}
+
+function updateTodayPreview() {
+    const container = document.getElementById('todayProgressSummary');
+    if (!container) return;
+
+    const completedTasks = window.appData.tasks.filter(t => t.completed);
+    const totalTasks = window.appData.tasks.length;
+    const journalLength = window.appData.journal ? window.appData.journal.length : 0;
+
+    let html = `
+        <div class="flex flex-wrap gap-4 mt-2">
+            <div class="flex items-center gap-2">
+                <span class="text-emerald-500">✅</span>
+                <span class="font-bold">${completedTasks.length}/${totalTasks} Misi Selesai</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-amber-500">✍️</span>
+                <span>${journalLength} Karakter Jurnal</span>
+            </div>
+        </div>
+    `;
+
+    if (completedTasks.length > 0) {
+        html += `
+            <div class="mt-3 flex flex-wrap gap-1">
+                ${completedTasks.slice(0, 3).map(t => `<span class="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[10px] rounded-full font-bold"># ${t.text.substring(0, 20)}...</span>`).join('')}
+                ${completedTasks.length > 3 ? `<span class="text-[10px] text-slate-400 font-bold">+${completedTasks.length - 3} lainnya</span>` : ''}
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
+}
+
+function showHistoryModal() {
+    renderHistory();
+    document.getElementById('historyModal').classList.add('active');
+}
+
+function closeHistoryModal() {
+    document.getElementById('historyModal').classList.remove('active');
+}
+
+function renderHistory() {
+    const container = document.getElementById('historyEntries');
+    if (window.appData.history.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-12 text-slate-400">
+                <p>Belum ada riwayat tercatat. Mulailah beraktivitas dan mencatat jurnal hari ini!</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Sort history by date (newest first)
+    const sortedHistory = [...window.appData.history].reverse();
+
+    container.innerHTML = sortedHistory.map(entry => {
+        const dateObj = new Date(entry.date);
+        const formattedDate = dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+        const tasksHtml = (entry.completedTasks && entry.completedTasks.length > 0)
+            ? entry.completedTasks.map(t => `<li class="flex items-start gap-2 mb-1">
+                <span class="text-emerald-500 mt-0.5">✔</span>
+                <span class="text-slate-700 dark:text-slate-300">${t}</span>
+              </li>`).join('')
+            : '<p class="text-slate-400 italic">Tidak ada misi selesai.</p>';
+
+        return `
+            <div class="bg-white dark:bg-slate-700/50 rounded-2xl border border-slate-200 dark:border-slate-600 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                <div class="bg-slate-50 dark:bg-slate-800 p-4 border-b border-slate-200 dark:border-slate-600 flex justify-between items-center">
+                    <h3 class="font-bold text-slate-800 dark:text-slate-100">${formattedDate}</h3>
+                    <div class="flex gap-1">
+                         <span class="px-2 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-[10px] font-black rounded uppercase">Log Ditemukan</span>
+                    </div>
+                </div>
+                <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Big Five Snapshot -->
+                    <div class="space-y-3">
+                        <p class="text-xs font-black text-slate-400 uppercase tracking-widest">Mental Snapshot</p>
+                        <div class="grid grid-cols-1 gap-2">
+                             ${Object.entries(entry.bigFive).map(([id, val]) => {
+            const trait = traits.find(t => t.id === id);
+            if (!trait) return '';
+            return `
+                                    <div>
+                                        <div class="flex justify-between text-[10px] font-bold mb-1">
+                                            <span class="text-slate-500">${trait.name}</span>
+                                            <span class="text-slate-800 dark:text-slate-200">${val}%</span>
+                                        </div>
+                                        <div class="w-full bg-slate-100 dark:bg-slate-600 rounded-full h-1">
+                                            <div class="bg-${trait.color}-500 h-full rounded-full" style="width: ${val}%"></div>
+                                        </div>
+                                    </div>
+                                 `;
+        }).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Tasks Completed -->
+                    <div class="space-y-3">
+                        <p class="text-xs font-black text-emerald-500 uppercase tracking-widest">Misi Selesai (${entry.completedTasks ? entry.completedTasks.length : 0})</p>
+                        <ul class="text-sm">
+                            ${tasksHtml}
+                        </ul>
+                    </div>
+
+                    <!-- Journal -->
+                    <div class="space-y-3">
+                        <p class="text-xs font-black text-amber-500 uppercase tracking-widest">Jurnal / Catatan</p>
+                        <div class="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800 min-h-[100px]">
+                            <p class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">${entry.journal || '<span class="text-slate-400 italic">No entry.</span>'}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 
@@ -1104,16 +1296,45 @@ function closeAchievements() {
 // ============================================
 
 function initKeyboardShortcuts() {
+    const tabs = ['utama', 'catatan', 'lainnya'];
+
+    function getCurrentTab() {
+        for (const tab of tabs) {
+            const panel = document.getElementById(`panel-${tab}`);
+            if (panel && panel.classList.contains('active')) return tab;
+        }
+        return tabs[0];
+    }
+
     document.addEventListener('keydown', (e) => {
+        // Don't trigger arrow nav when typing in inputs
+        const tag = document.activeElement.tagName.toLowerCase();
+        const isTyping = tag === 'input' || tag === 'textarea' || tag === 'select';
+
         if (e.ctrlKey && e.key === 'n') {
             e.preventDefault();
-            document.getElementById('taskInput').focus();
+            switchTab('utama');
+            setTimeout(() => document.getElementById('taskInput').focus(), 100);
         } else if (e.ctrlKey && e.key === 'd') {
             e.preventDefault();
             toggleDarkMode();
-        } else if (e.ctrlKey && e.key === 'k') {
+        } else if (e.ctrlKey && e.key === '1') {
             e.preventDefault();
-            document.getElementById('taskSearch').focus();
+            switchTab('utama');
+        } else if (e.ctrlKey && e.key === '2') {
+            e.preventDefault();
+            switchTab('catatan');
+        } else if (e.ctrlKey && e.key === '3') {
+            e.preventDefault();
+            switchTab('lainnya');
+        } else if (e.key === 'ArrowLeft' && !isTyping) {
+            e.preventDefault();
+            const idx = tabs.indexOf(getCurrentTab());
+            switchTab(tabs[(idx - 1 + tabs.length) % tabs.length]);
+        } else if (e.key === 'ArrowRight' && !isTyping) {
+            e.preventDefault();
+            const idx = tabs.indexOf(getCurrentTab());
+            switchTab(tabs[(idx + 1) % tabs.length]);
         } else if (e.key === '?') {
             showKeyboardHelp();
         }
@@ -1470,5 +1691,4 @@ function deleteTemplate(templateId) {
 }
 
 // ============================================
-
-window.addEventListener('DOMContentLoaded', initApp);
+// initApp is called from db.js after auth check
